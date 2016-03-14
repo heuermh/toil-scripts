@@ -70,17 +70,12 @@ def concordance(job, shared_ids, input_args):
                '-R', 'ref.fa',
                '--eval', 'eval.vcf',
                '--comp', 'comp.vcf',
-               '-o', output
-    ]
-    try:
-        docker_call(work_dir = work_dir,
-                    tool_parameters = command,
-                    tool = 'quay.io/ucsc_cgl/gatk',
-                    sudo = input_args['sudo'])
-    except:
-        sys.stderr.write("Running concordance with %s in %s failed." % (
-            " ".join(command), work_dir))
-        raise
+               '-o', output]
+
+    docker_call(work_dir = work_dir,
+                tool_parameters = command,
+                tool = 'quay.io/ucsc_cgl/gatk',
+                sudo = input_args['sudo'])
 
     upload_to_s3(work_dir, input_args, output)
 
