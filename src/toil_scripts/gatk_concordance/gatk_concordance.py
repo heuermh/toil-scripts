@@ -23,7 +23,7 @@ def build_parser():
 
 
 def batch_start(job, input_args):
-    shared_files = ['ref.fa', 'ref.fa.fai', 'ref.fa.dict', 'eval.vcf', 'comp.vcf']
+    shared_files = ['ref.fa', 'ref.fa.fai', 'ref.dict', 'eval.vcf', 'comp.vcf']
     shared_ids = {}
     for file_name in shared_files:
         url = input_args[file_name]
@@ -36,7 +36,7 @@ def concordance(job, shared_ids, input_args):
     Evaluate concordance between two VCFs with GATK.
     """
     work_dir = job.fileStore.getLocalTempDir()
-    input_files = ['ref.fa', 'ref.fa.fai', 'ref.fa.dict', 'eval.vcf', 'comp.vcf']
+    input_files = ['ref.fa', 'ref.fa.fai', 'ref.dict', 'eval.vcf', 'comp.vcf']
     read_from_filestore_hc(job, work_dir, shared_ids, *input_files)
 
     eval_name = input_args['eval.vcf'].split('/')[-1]
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     inputs = {'ref.fa': args.reference,
               'ref.fa.fai': args.reference_index,
-              'ref.fa.dict': args.reference_dict,
+              'ref.dict': args.reference_dict,
               'eval.vcf': args.eval_vcf,
               'comp.vcf': args.comp_vcf,
               's3_dir': args.output_dir,
