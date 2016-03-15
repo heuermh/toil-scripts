@@ -14,8 +14,8 @@ def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--reference', required=True, help="Reference Genome URL")
     parser.add_argument('-i', '--reference_index', required=True, help="Reference Genome index (.fai) URL")
-    parser.add_argument('-e', '--eval_vcf', required=True, help="VCF file URL to evaluate")
-    parser.add_argument('-c', '--comp_vcf', required=True, help="VCF file URL to compare against")
+    parser.add_argument('-1', '--eval_vcf', required=True, help="VCF file URL to evaluate")
+    parser.add_argument('-2', '--comp_vcf', required=True, help="VCF file URL to compare against")
     parser.add_argument('-o', '--output_dir', required=True, help="Output directory S3 URL")
     return parser
 
@@ -87,9 +87,9 @@ if __name__ == '__main__':
 
     inputs = {'ref.fa': args.reference,
               'ref.fa.fai': args.reference_index,
-              'eval.vcf', args.eval_vcf,
-              'comp.vcf', args.comp_vcf,
-              's3_dir', args.output_dir,
+              'eval.vcf': args.eval_vcf,
+              'comp.vcf': args.comp_vcf,
+              's3_dir': args.output_dir,
               'uuid': None,
               'cpu_count': str(multiprocessing.cpu_count()),
               'ssec': None,
