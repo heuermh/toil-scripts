@@ -17,7 +17,9 @@ def build_parser():
     parser.add_argument('-i', '--reference_index', required=True, help="Reference Genome index (.fai) URL")
     parser.add_argument('-d', '--reference_dict', required=True, help="Reference Genome sequence dictionary (.dict) URL")
     parser.add_argument('-1', '--eval_vcf', required=True, help="VCF file URL to evaluate")
+    parser.add_argument('-y', '--eval_label', required=False, help="Optional label for VCF file to evaluate, defaults to file name")
     parser.add_argument('-2', '--comp_vcf', required=True, help="VCF file URL to compare against")
+    parser.add_argument('-z', '--comp_label', required=False, help="Optional label for VCF file to compare against, defaults to file name")
     parser.add_argument('-o', '--output_dir', required=True, help="Output directory S3 URL")
     return parser
 
@@ -39,11 +41,13 @@ def concordance(job, shared_ids, input_args):
     input_files = ['ref.fa', 'ref.fa.fai', 'ref.dict', 'eval.vcf', 'comp.vcf']
     read_from_filestore_hc(job, work_dir, shared_ids, *input_files)
 
-    eval_name = input_args['eval.vcf'].split('/')[-1]
-    comp_name = input_args['comp.vcf'].split('/')[-1]
+    # todo: is this the best way to do this?
+    eval_name = input_args['eval_label'] if 'eval_label' in input_args else input_args['eval.vcf'].split('/')[-1]
+    comp_name = input_args['comp_label'] if 'comp_label' in input_args else input_args['comp.vcf'].split('/')[-1]
     output = '%s_vs_%s.concordance' % (eval_name, comp_name)
     command = ['-T', 'GenotypeConcordance',
                '-R', 'ref.fa',
+               '-nct', input_args['cpu_count'],
                '--eval', 'eval.vcf',
                '--comp', 'comp.vcf',
                '-o', output]
@@ -65,9 +69,12 @@ if __name__ == '__main__':
               'ref.fa.fai': args.reference_index,
               'ref.dict': args.reference_dict,
               'eval.vcf': args.eval_vcf,
+              'eval_label': args.eval_label,
               'comp.vcf': args.comp_vcf,
+              'comp_label': args.comp_label,
               's3_dir': args.output_dir,
               'uuid': None,
+              # todo: this is req'd by gatk and by upload_to_s3
               'cpu_count': str(multiprocessing.cpu_count()),
               'ssec': None,
               'sudo': False}
