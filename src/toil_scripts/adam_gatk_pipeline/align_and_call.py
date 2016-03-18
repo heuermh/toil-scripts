@@ -140,6 +140,11 @@ def build_parser():
     parser.add_argument('-U', '--uuid_manifest', required = True,
                         help = 'Sample UUID.')
 
+    # optionally add suffix
+    parser.add_argument('--dir_suffix',
+                        help = 'Optional suffix to add to output directory names.',
+                        default = '')
+
     # what pipeline are we running
     parser.add_argument('-PR', '--pipeline_to_run',
                         help = "Whether we should run 'adam', 'gatk', or 'both'. Default is 'both'.",
@@ -191,12 +196,16 @@ def build_parser():
     parser.add_argument('-k', '--use_bwakit', action='store_true', help='Use bwakit instead of the binary build of bwa')
     parser.add_argument('-t', '--alt', required=False, help='Alternate file for reference build (alt). Necessary for alt aware alignment.')
     parser.set_defaults(sudo = False)
+    parser.add_argument('--trim', action='store_true', help='Trim adapters during alignment.')
 
     # add ADAM args
     parser.add_argument('-N', '--num_nodes', type = int, required = False, default = None,
-                        help = 'Number of nodes to use. Exclusive of --master_ip.')
+                        help = 'Number of Toil nodes to allocate per Spark subcluster. Exclusive of --master_ip.')
     parser.add_argument('-MI', '--master_ip', required = False, default = None,
-                        help = 'Master IP for Spark/HDFS. Should be provided if pointing at static spark cluster.')
+                        help ="IP or hostname of host running for Spark master and HDFS namenode. Should be provided "
+                              "if pointing at a static (external or standalone) Spark cluster. The special value "
+                              "'auto' indicates the master of standalone cluster, i.e. one that is managed by the "
+                              "uberscript.")
     parser.add_argument('-d', '--driver_memory', required = True,
                         help = 'Amount of memory to allocate for Spark Driver.')
     parser.add_argument('-q', '--executor_memory', required = True,
@@ -231,7 +240,8 @@ def sample_loop(job,
                 skip_alignment,
                 skip_preprocessing,
                 autoscale_cluster,
-                sequence_dir):
+                sequence_dir,
+                dir_suffix):
   """
   Loops over the sample_ids (uuids) in the manifest, creating child jobs to process each
   """
@@ -247,11 +257,11 @@ def sample_loop(job,
     ## set uuid inputs
     uuid_bwa_inputs['lb'] = uuid
     uuid_bwa_inputs['uuid'] = uuid
-    uuid_adam_inputs['outDir'] = 's3://{s3_bucket}/analysis/{uuid}'.format(**locals())
-    uuid_adam_inputs['bamName'] = 's3://{s3_bucket}/alignment/{uuid}.bam'.format(**locals())
-    uuid_gatk_preprocess_inputs['s3_dir'] = '{s3_bucket}/analysis/{uuid}'.format(**locals())
-    uuid_gatk_adam_call_inputs['s3_dir'] = '{s3_bucket}/analysis/{uuid}'.format(**locals())
-    uuid_gatk_gatk_call_inputs['s3_dir'] = '{s3_bucket}/analysis/{uuid}'.format(**locals())
+    uuid_adam_inputs['outDir'] = 's3://{s3_bucket}/analysis{dir_suffix}/{uuid}'.format(**locals())
+    uuid_adam_inputs['bamName'] = 's3://{s3_bucket}/alignment{dir_suffix}/{uuid}.bam'.format(**locals())
+    uuid_gatk_preprocess_inputs['s3_dir'] = '{s3_bucket}/analysis{dir_suffix}/{uuid}'.format(**locals())
+    uuid_gatk_adam_call_inputs['s3_dir'] = '{s3_bucket}/analysis{dir_suffix}/{uuid}'.format(**locals())
+    uuid_gatk_gatk_call_inputs['s3_dir'] = '{s3_bucket}/analysis{dir_suffix}/{uuid}'.format(**locals())
 
     # are we autoscaling? if so, bump the cluster size by one now
     if autoscale_cluster:
@@ -270,7 +280,8 @@ def sample_loop(job,
                       skip_alignment,
                       skip_preprocessing,
                       autoscale_cluster,
-                      sequence_dir)
+                      sequence_dir,
+                      dir_suffix)
 
 
 def static_dag(job,
@@ -286,7 +297,8 @@ def static_dag(job,
                skip_alignment,
                skip_preprocessing,
                autoscale_cluster,
-               sequence_dir):
+               sequence_dir,
+               dir_suffix):
     """
     Prefer this here as it allows us to pull the job functions from other jobs
     without rewrapping the job functions back together.
@@ -320,7 +332,7 @@ def static_dag(job,
     # write config for GATK preprocessing
     gatk_preprocess_config_path = os.path.join(work_dir, '{uuid}_gatk_preprocess_config.csv'.format(**locals()))
     gatk_preprocess_fp = open(gatk_preprocess_config_path, "w")
-    print >> gatk_preprocess_fp, '{uuid},s3://{s3_bucket}/alignment/{uuid}.bam'.format(**locals())
+    print >> gatk_preprocess_fp, '{uuid},s3://{s3_bucket}/alignment{dir_suffix}/{uuid}.bam'.format(**locals())
     gatk_preprocess_fp.flush()
     gatk_preprocess_fp.close()
     gatk_preprocess_inputs['config'] = job.fileStore.writeGlobalFile(gatk_preprocess_config_path)
@@ -328,7 +340,7 @@ def static_dag(job,
     # write config for GATK haplotype caller for the result of ADAM preprocessing
     gatk_adam_call_config_path = os.path.join(work_dir, '{uuid}_gatk_adam_call_config.csv'.format(**locals()))
     gatk_adam_call_fp = open(gatk_adam_call_config_path, "w")
-    print >> gatk_adam_call_fp, '{uuid},s3://{s3_bucket}/analysis/{uuid}/{uuid}.adam.bam'.format(**locals())
+    print >> gatk_adam_call_fp, '{uuid},s3://{s3_bucket}/analysis{dir_suffix}/{uuid}/{uuid}.adam.bam'.format(**locals())
     gatk_adam_call_fp.flush()
     gatk_adam_call_fp.close()
     gatk_adam_call_inputs['config'] = job.fileStore.writeGlobalFile(gatk_adam_call_config_path)
@@ -336,7 +348,7 @@ def static_dag(job,
     # write config for GATK haplotype caller for the result of GATK preprocessing
     gatk_gatk_call_config_path = os.path.join(work_dir, '{uuid}_gatk_gatk_call_config.csv'.format(**locals()))
     gatk_gatk_call_fp = open(gatk_gatk_call_config_path, "w")
-    print >> gatk_gatk_call_fp, '{uuid},s3://{s3_bucket}/analysis/{uuid}/{uuid}.gatk.bam'.format(**locals())
+    print >> gatk_gatk_call_fp, '{uuid},s3://{s3_bucket}/analysis{dir_suffix}/{uuid}/{uuid}.gatk.bam'.format(**locals())
     gatk_gatk_call_fp.flush()
     gatk_gatk_call_fp.close()
     gatk_gatk_call_inputs['config'] = job.fileStore.writeGlobalFile(gatk_gatk_call_config_path)
@@ -363,7 +375,7 @@ def static_dag(job,
 
     # add code to bump the number of jobs after alignment
     # start with -1 since we already have a single node for our sample
-    nodes_needed_after_alignment = -1 
+    nodes_needed_after_alignment = -1
 
     # adam needs:
     # - a spark driver
@@ -375,7 +387,7 @@ def static_dag(job,
             nodes_needed_after_alignment += 1
         else:
             nodes_needed_after_alignment += (adam_inputs['numWorkers'] + 2)
-        
+
     # gatk needs one node
     if (pipeline_to_run == "gatk" or
         pipeline_to_run == "both"):
@@ -404,7 +416,7 @@ def static_dag(job,
             bwa.addChild(increase_nodes_after_alignment)
     elif autoscale_after_alignment:
         job.addChild(increase_nodes_after_alignment)
-   
+
     if (pipeline_to_run == "adam" or
         pipeline_to_run == "both"):
 
@@ -456,7 +468,7 @@ def increase_node_count(job, nodes_to_add, uuid):
 def decrease_node_count(job, nodes_to_add, uuid):
 
     Samples.decrease_nodes(uuid, nodes_to_add)
-    
+
 
 if __name__ == '__main__':
 
@@ -481,15 +493,15 @@ if __name__ == '__main__':
                   'ssec': None,
                   'output_dir': None,
                   'sudo': args.sudo,
-                  's3_dir': "%s/alignment" % args.s3_bucket,
+                  's3_dir': "%s/alignment%s" % (args.s3_bucket, args.dir_suffix),
                   'cpu_count': None,
                   'file_size': args.file_size,
-                  'use_bwakit': args.use_bwakit}
+                  'use_bwakit': args.use_bwakit,
+                  'sort': True, # TODO: #169 will code this to false
+                  'trim': args.trim}
 
-    if not ((args.master_ip and not args.num_nodes) or
-	    (args.master_ip and args.num_nodes == 0) or
-            (not args.master_ip and args.num_nodes)):
-        raise ValueError("Only one of --master_ip (%s) and --num_nodes (%d) can be provided." % 
+    if bool(args.master_ip) == bool(args.num_nodes):
+        raise ValueError("Exactly one of --master_ip (%s) and --num_nodes (%d) must be provided." %
                          (args.master_ip, args.num_nodes))
 
     if args.num_nodes <= 1 and not args.master_ip:
@@ -560,4 +572,5 @@ if __name__ == '__main__':
                                        args.skip_alignment,
                                        args.skip_preprocessing,
                                        args.autoscale_cluster,
-                                       args.sequence_dir), args)
+                                       args.sequence_dir,
+                                       args.dir_suffix), args)
